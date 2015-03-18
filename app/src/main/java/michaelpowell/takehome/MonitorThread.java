@@ -1,7 +1,6 @@
 package michaelpowell.takehome;
 
 
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -14,99 +13,122 @@ public class MonitorThread extends Thread {
 
   private static final String LOG_TAG = "MonitorThread";
 
+  private boolean mContinueMonitoring = true;
+
   // Handler msg.what flags
   public static final int MSG_CMD_ABSOLUTE = 0x02;
   public static final int MSG_CMD_RELATIVE = 0x01;
 
   // Command structure
-  public static final int CMD_ABSOLUTE = 0x02;
-  public static final int CMD_RELATIVE = 0x01;
+  private static final int CMD_ABSOLUTE = 0x02;
+  private static final int CMD_ABSOLUTE_SIZE = 3;
+  private static final int CMD_RELATIVE = 0x01;
+  private static final int CMD_RELATIVE_SIZE = 6;
 
-  // Bundle flag for byte array
-  private static final String EXTRA_BYTE_ARRAY = "extra_byte_array";
+  private Handler mMainThreadHandler;
+  private String mServerIpAddress;
 
-  private Handler mainThreadHandler;
-
-  public MonitorThread(Handler mainThreadHandler) {
-    this.mainThreadHandler = mainThreadHandler;
+  public MonitorThread(Handler mainThreadHandler, String serverIp) {
+    mMainThreadHandler = mainThreadHandler;
+    mServerIpAddress = serverIp;
   }
 
   @Override
   public void run() {
 
-    byte[] absoluteBuffer = new byte[3];
-    byte[] relativeBuffer = new byte[6];
+    BufferedInputStream bufferedInputStream = null;
+
+    try {
+      bufferedInputStream = connectToServer(mServerIpAddress);
+    } catch (IOException e) {
+      Log.e(LOG_TAG, "Connection to server failed");
+      e.printStackTrace();
+      return;
+    }
+
+    byte[] absoluteBuffer = new byte[CMD_ABSOLUTE_SIZE];
+    byte[] relativeBuffer = new byte[CMD_RELATIVE_SIZE];
     int colorInt;
     Message msg;
+
     try {
-      BufferedInputStream bufferedInputStream = connectToServer();
 
-      while (true) {
-        switch(bufferedInputStream.read()) {
+      while (mContinueMonitoring) {
+        switch (bufferedInputStream.read()) {
           case CMD_ABSOLUTE:
-
-            bufferedInputStream.read(absoluteBuffer, 0, 3);
-            colorInt = (0xFF << 24) | (absoluteBuffer[0] << 16) | (absoluteBuffer[1] << 8) | absoluteBuffer[2];
-            msg = mainThreadHandler.obtainMessage(MSG_CMD_ABSOLUTE, colorInt, -1);
-            mainThreadHandler.sendMessage(msg);
-
-            /*
-            Log.i(LOG_TAG, "abs[0]:" + String.format("%02X", absoluteBuffer[0]));
-            Log.i(LOG_TAG, "abs[1]:" + String.format("%02X", absoluteBuffer[1]));
-            Log.i(LOG_TAG, "abs[2]:" + String.format("%02X", absoluteBuffer[2]));
-            */
-
+            processAbsoluteCommand(bufferedInputStream, absoluteBuffer);
             break;
           case CMD_RELATIVE:
-            bufferedInputStream.read(relativeBuffer, 0, 6);
-
-            int dr = (relativeBuffer[0] << 8) | relativeBuffer[1];
-            int dg = (relativeBuffer[2] << 8) | relativeBuffer[3];
-            int db = (relativeBuffer[4] << 8) | relativeBuffer[5];
-
-            int[] offsets = new int[] {dr, dg, db};
-
-            msg = mainThreadHandler.obtainMessage(MSG_CMD_RELATIVE, offsets);
-            mainThreadHandler.sendMessage(msg);
-
-            /*
-            Log.i(LOG_TAG, "rel[0|1]:" + String.format("%02X", (relativeBuffer[0] << 8) | relativeBuffer[1]));
-            Log.i(LOG_TAG, "rel[2|3]:" + String.format("%02X", (relativeBuffer[2] << 8) | relativeBuffer[3]));
-            Log.i(LOG_TAG, "rel[4|5]:" + String.format("%02X", (relativeBuffer[4] << 8) | relativeBuffer[5]));
-            */
+            processRelativeCommand(bufferedInputStream, relativeBuffer);
             break;
         }
       }
 
-    } catch (Exception e) {
+    } catch (IOException e) {
+      Log.e(LOG_TAG, "Some issue with stream");
       e.printStackTrace();
     }
 
   }
 
+  private void processRelativeCommand(BufferedInputStream bufferedInputStream, byte[] relativeBuffer) {
+    try {
+      bufferedInputStream.read(relativeBuffer, 0, CMD_RELATIVE_SIZE);
+      int[] offsets = bufferToInts(relativeBuffer);
+      Message msg = mMainThreadHandler.obtainMessage(MSG_CMD_RELATIVE, offsets);
+      mMainThreadHandler.sendMessage(msg);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private void processAbsoluteCommand(BufferedInputStream bufferedInputStream, byte[] absoluteBuffer) {
+    try {
+      bufferedInputStream.read(absoluteBuffer, 0, CMD_ABSOLUTE_SIZE);
+      int colorInt = bufferToInt(absoluteBuffer);
+      Message msg = mMainThreadHandler.obtainMessage(MSG_CMD_ABSOLUTE, colorInt, -1);
+      mMainThreadHandler.sendMessage(msg);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
   /**
-   * Return an integer representing a color.
-   * @param buffer a byte array containing red, green and blue components of a color
+   * Converts absolute command's byte array an argb color integer
    */
-  private int convertToColorInt(byte[] buffer) {
+  public static int bufferToInt(byte[] buffer) {
+    if (null == buffer || buffer.length != CMD_ABSOLUTE_SIZE) {
+      throw new IllegalArgumentException("Buffer must be of size: " + CMD_ABSOLUTE_SIZE);
+    }
     return (0xFF << 24) | (buffer[0] << 16) | (buffer[1] << 8) | buffer[2];
   }
 
-  private int convertToOffsetInt(byte[] buffer) {
-        return ((0xFF << 24) |
-            (buffer[0] << 20) |
-            (buffer[1] << 16) |
-            (buffer[2] << 12) |
-            (buffer[3] << 8) |
-            (buffer[4] << 4) |
-            (buffer[5])
-        );
+  /**
+   * Converts relative command's byte array into an int array containing
+   * offset values
+   * @param buffer
+   * @return int array where arr[0] contains red offset
+   *                         arr[1] contains green offset
+   *                         arr[2] contains blue offset
+   */
+  public static int[] bufferToInts(byte[] buffer) {
+    if (null == buffer || buffer.length != CMD_RELATIVE_SIZE) {
+      throw new IllegalArgumentException("Buffer must be of size: " + CMD_RELATIVE_SIZE);
+    }
+    int dr = (buffer[0] << 8) | buffer[1];
+    int dg = (buffer[2] << 8) | buffer[3];
+    int db = (buffer[4] << 8) | buffer[5];
 
+    return new int[] {dr, dg, db};
   }
 
-  private BufferedInputStream connectToServer() throws IOException {
-    Socket socket = new Socket("10.0.0.18", 1234);
+  private BufferedInputStream connectToServer(String server) throws IOException {
+    Socket socket = new Socket(server, 1234);
     return new BufferedInputStream(socket.getInputStream());
+  }
+
+  public void stopMonitoring() {
+    mContinueMonitoring = false;
   }
 
 }
