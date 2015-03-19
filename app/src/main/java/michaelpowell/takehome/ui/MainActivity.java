@@ -1,10 +1,18 @@
-package michaelpowell.takehome;
+package michaelpowell.takehome.ui;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.ActionBarActivity;
-import android.widget.ImageView;
+import android.text.TextUtils;
+import android.widget.EditText;
+
+import michaelpowell.takehome.model.Command;
+import michaelpowell.takehome.model.DisplayColor;
+import michaelpowell.takehome.MonitorThread;
+import michaelpowell.takehome.R;
 
 
 public class MainActivity extends ActionBarActivity implements CommandFragment.CommandSelectedListener{
@@ -12,8 +20,58 @@ public class MainActivity extends ActionBarActivity implements CommandFragment.C
   private static final String LOG_TAG = "MainActivity";
   private DisplayColor displayColor = new DisplayColor();
 
-  // TODO: allow user to enter IP address of server!
-  // TODO: something is wrong with the red calculation
+  /** Thread responsible for obtaining messages from the server */
+  private MonitorThread mMonitorThread;
+
+  /** Fragment responsible for presenting a list of commands and allowing selection */
+  private CommandFragment mCommandFragment;
+
+  /** Fragment responsible for presenting the current color */
+  private ColorFragment mColorFragment;
+
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+    mCommandFragment = new CommandFragment();
+    mColorFragment = new ColorFragment();
+    getSupportFragmentManager().beginTransaction().add(R.id.container_left, mCommandFragment).commit();
+    getSupportFragmentManager().beginTransaction().add(R.id.container_right, mColorFragment).commit();
+  }
+
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    final EditText prompt = new EditText(this);
+    new AlertDialog.Builder(this)
+        .setTitle("Server Address")
+        .setView(prompt)
+        .setPositiveButton(getString(android.R.string.ok), new DialogInterface.OnClickListener() {
+        @Override
+        public void onClick(DialogInterface dialog, int which) {
+          String server = prompt.getEditableText().toString();
+          if (!TextUtils.isEmpty(server)) {
+            startMonitorThread(server);
+          }
+        }
+       }).show();
+  }
+
+  private void startMonitorThread(String serverAddress) {
+    mMonitorThread = new MonitorThread(mHandler, serverAddress);
+    mMonitorThread.start();
+  }
+
+
+  @Override
+  protected void onPause() {
+    super.onPause();
+    if (mMonitorThread != null) {
+      mMonitorThread.stopMonitoring();
+    }
+
+  }
 
   Handler mHandler = new Handler(new Handler.Callback() {
     @Override
@@ -35,7 +93,6 @@ public class MainActivity extends ActionBarActivity implements CommandFragment.C
     }
   });
 
-  // TODO abstract away the image display
   private void performCommand(Command command) {
     mCommandFragment.addCommand(command);
     switch (command.type) {
@@ -65,7 +122,7 @@ public class MainActivity extends ActionBarActivity implements CommandFragment.C
     if (set) {
       displayColor.setCurrentAbsolute(colorInt);
     } else {
-      displayColor.setCurrentAbsolute(0x7F7F7F);
+      displayColor.setCurrentAbsolute(0xFF7F7F7F);
     }
     updateView(displayColor);
   }
@@ -81,35 +138,7 @@ public class MainActivity extends ActionBarActivity implements CommandFragment.C
   }
 
   private void updateView(DisplayColor color) {
-    mColorImage.setBackgroundColor(color.getCurrentColor());
-  }
-
-  private MonitorThread mMonitorThread;
-  private CommandFragment mCommandFragment;
-  private ImageView mColorImage;
-
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_main);
-    mCommandFragment = new CommandFragment();
-    mColorImage = (ImageView) findViewById(R.id.color_image);
-    getSupportFragmentManager().beginTransaction().add(R.id.container_left, mCommandFragment).commit();
-  }
-
-
-  @Override
-  protected void onResume() {
-    super.onResume();
-    mMonitorThread = new MonitorThread(mHandler, "10.0.0.18");
-    mMonitorThread.start();
-  }
-
-  @Override
-  protected void onPause() {
-    super.onPause();
-    mMonitorThread.stopMonitoring();
-
+    mColorFragment.setColor(color.getCurrentColor());
   }
 
   @Override

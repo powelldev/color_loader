@@ -1,4 +1,4 @@
-package michaelpowell.takehome;
+package michaelpowell.takehome.model;
 
 import android.graphics.Color;
 

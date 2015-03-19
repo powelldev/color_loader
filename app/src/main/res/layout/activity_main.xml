@@ -6,16 +6,16 @@
 
     <FrameLayout
         android:id="@+id/container_left"
+        android:layout_alignParentLeft="true"
+        android:layout_toLeftOf="@+id/color_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <ImageView
-        android:layout_centerVertical="true"
+    <FrameLayout
         android:layout_alignParentRight="true"
-        android:id="@+id/color_image"
-        android:layout_width="140dp"
-        android:layout_height="140dp"
-        tools:src="@android:color/black"
+        android:id="@+id/container_right"
+        android:layout_width="120dp"
+        android:layout_height="match_parent"
         />
 
 

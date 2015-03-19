@@ -1,25 +1,21 @@
-package michaelpowell.takehome;
+package michaelpowell.takehome.ui;
 
 import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
 import android.support.v4.app.ListFragment;
-import android.util.SparseBooleanArray;
-import android.view.ActionMode;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AbsListView;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.CheckedTextView;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import michaelpowell.takehome.model.Command;
+import michaelpowell.takehome.R;
 
 public class CommandFragment extends ListFragment {
 
@@ -71,6 +67,11 @@ public class CommandFragment extends ListFragment {
     }
 
     public void addCommand(Command command) {
+      if (command.type == Command.Type.ABSOLUTE) {
+        for(int i = 0; i < mIsCheckedList.size(); i++) {
+          mIsCheckedList.set(i, false);
+        }
+      }
       mCommandList.add(command);
       mIsCheckedList.add(true);
       this.notifyDataSetChanged();

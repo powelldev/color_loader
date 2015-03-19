@@ -9,6 +9,11 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+import michaelpowell.takehome.utils.ColorUtils;
+
+/**
+ * Thread to obtain incoming data and send to a subscriber.
+ */
 public class MonitorThread extends Thread {
 
   private static final String LOG_TAG = "MonitorThread";
@@ -35,8 +40,10 @@ public class MonitorThread extends Thread {
 
   @Override
   public void run() {
-
     BufferedInputStream bufferedInputStream = null;
+
+    byte[] absoluteBuffer = new byte[CMD_ABSOLUTE_SIZE];
+    byte[] relativeBuffer = new byte[CMD_RELATIVE_SIZE];
 
     try {
       bufferedInputStream = connectToServer(mServerIpAddress);
@@ -46,13 +53,7 @@ public class MonitorThread extends Thread {
       return;
     }
 
-    byte[] absoluteBuffer = new byte[CMD_ABSOLUTE_SIZE];
-    byte[] relativeBuffer = new byte[CMD_RELATIVE_SIZE];
-    int colorInt;
-    Message msg;
-
     try {
-
       while (mContinueMonitoring) {
         switch (bufferedInputStream.read()) {
           case CMD_ABSOLUTE:
@@ -74,7 +75,7 @@ public class MonitorThread extends Thread {
   private void processRelativeCommand(BufferedInputStream bufferedInputStream, byte[] relativeBuffer) {
     try {
       bufferedInputStream.read(relativeBuffer, 0, CMD_RELATIVE_SIZE);
-      int[] offsets = bufferToInts(relativeBuffer);
+      int[] offsets = ColorUtils.bufferToInts(relativeBuffer, CMD_RELATIVE_SIZE);
       Message msg = mMainThreadHandler.obtainMessage(MSG_CMD_RELATIVE, offsets);
       mMainThreadHandler.sendMessage(msg);
     } catch (IOException e) {
@@ -85,41 +86,12 @@ public class MonitorThread extends Thread {
   private void processAbsoluteCommand(BufferedInputStream bufferedInputStream, byte[] absoluteBuffer) {
     try {
       bufferedInputStream.read(absoluteBuffer, 0, CMD_ABSOLUTE_SIZE);
-      int colorInt = bufferToInt(absoluteBuffer);
+      int colorInt = ColorUtils.bufferToInt(absoluteBuffer, CMD_ABSOLUTE_SIZE);
       Message msg = mMainThreadHandler.obtainMessage(MSG_CMD_ABSOLUTE, colorInt, -1);
       mMainThreadHandler.sendMessage(msg);
     } catch (IOException e) {
       e.printStackTrace();
     }
-  }
-
-  /**
-   * Converts absolute command's byte array an argb color integer
-   */
-  public static int bufferToInt(byte[] buffer) {
-    if (null == buffer || buffer.length != CMD_ABSOLUTE_SIZE) {
-      throw new IllegalArgumentException("Buffer must be of size: " + CMD_ABSOLUTE_SIZE);
-    }
-    return (0xFF << 24) | (buffer[0] << 16) | (buffer[1] << 8) | buffer[2];
-  }
-
-  /**
-   * Converts relative command's byte array into an int array containing
-   * offset values
-   * @param buffer
-   * @return int array where arr[0] contains red offset
-   *                         arr[1] contains green offset
-   *                         arr[2] contains blue offset
-   */
-  public static int[] bufferToInts(byte[] buffer) {
-    if (null == buffer || buffer.length != CMD_RELATIVE_SIZE) {
-      throw new IllegalArgumentException("Buffer must be of size: " + CMD_RELATIVE_SIZE);
-    }
-    int dr = (buffer[0] << 8) | buffer[1];
-    int dg = (buffer[2] << 8) | buffer[3];
-    int db = (buffer[4] << 8) | buffer[5];
-
-    return new int[] {dr, dg, db};
   }
 
   private BufferedInputStream connectToServer(String server) throws IOException {

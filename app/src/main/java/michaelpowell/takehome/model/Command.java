@@ -1,24 +1,23 @@
-package michaelpowell.takehome;
+package michaelpowell.takehome.model;
 
 import android.graphics.Color;
 
 public class Command {
 
-  Type type;
+  public Type type;
+  public int color;
+  public int[] colorOffset;
 
-  int color;
-  int[] colorOffset;
-
-  Command(int absoluteColorInt) {
+  public Command(int absoluteColorInt) {
     type = Type.ABSOLUTE;
     color = absoluteColorInt;
   }
 
-  Command(int[] offsets) {
+  public Command(int[] offsets) {
     type = Type.RELATIVE;
     colorOffset = offsets;
   }
-  enum Type {
+  public enum Type {
     ABSOLUTE, RELATIVE
   }
 
